@@ -1,0 +1,3 @@
+CREATE POLICY "Cashiers and auditors view profiles" ON public.profiles FOR SELECT TO authenticated USING (private.has_role(auth.uid(), 'cashier') OR private.has_role(auth.uid(), 'auditor'));
+CREATE POLICY "Cashiers view allocations for redemption" ON public.weekly_allocations FOR SELECT TO authenticated USING (private.has_role(auth.uid(), 'cashier'));
+CREATE POLICY "Cashiers view coupon tokens" ON public.coupon_tokens FOR SELECT TO authenticated USING (private.has_role(auth.uid(), 'cashier'));
