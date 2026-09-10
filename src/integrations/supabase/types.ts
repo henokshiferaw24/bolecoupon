@@ -14,16 +14,306 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          details: Json
+          entity_id: string | null
+          entity_type: string
+          id: number
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          entity_id?: string | null
+          entity_type: string
+          id?: never
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          entity_id?: string | null
+          entity_type?: string
+          id?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupon_tokens: {
+        Row: {
+          allocation_id: string
+          amount: number
+          created_at: string
+          employee_id: string
+          expires_at: string
+          id: string
+          redeemed_at: string | null
+          redeemed_by: string | null
+          token: string
+          week_start: string
+        }
+        Insert: {
+          allocation_id: string
+          amount: number
+          created_at?: string
+          employee_id: string
+          expires_at: string
+          id?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          token?: string
+          week_start: string
+        }
+        Update: {
+          allocation_id?: string
+          amount?: number
+          created_at?: string
+          employee_id?: string
+          expires_at?: string
+          id?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          token?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_tokens_allocation_id_fkey"
+            columns: ["allocation_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_allocations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_tokens_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_tokens_redeemed_by_fkey"
+            columns: ["redeemed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          department: string | null
+          display_name: string
+          employee_number: string | null
+          id: string
+          is_active: boolean
+          must_change_password: boolean
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          department?: string | null
+          display_name: string
+          employee_number?: string | null
+          id: string
+          is_active?: boolean
+          must_change_password?: boolean
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          department?: string | null
+          display_name?: string
+          employee_number?: string | null
+          id?: string
+          is_active?: boolean
+          must_change_password?: boolean
+          updated_at?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      redemptions: {
+        Row: {
+          allocation_id: string
+          amount: number
+          cashier_id: string
+          employee_id: string
+          id: string
+          redeemed_at: string
+          token_id: string
+        }
+        Insert: {
+          allocation_id: string
+          amount: number
+          cashier_id: string
+          employee_id: string
+          id?: string
+          redeemed_at?: string
+          token_id: string
+        }
+        Update: {
+          allocation_id?: string
+          amount?: number
+          cashier_id?: string
+          employee_id?: string
+          id?: string
+          redeemed_at?: string
+          token_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "redemptions_allocation_id_fkey"
+            columns: ["allocation_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_allocations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "redemptions_cashier_id_fkey"
+            columns: ["cashier_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "redemptions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "redemptions_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: true
+            referencedRelation: "coupon_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      weekly_allocations: {
+        Row: {
+          approved_amount: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          eligible: boolean
+          employee_id: string
+          id: string
+          remaining_balance: number
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          approved_amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          eligible?: boolean
+          employee_id: string
+          id?: string
+          remaining_balance?: number
+          updated_at?: string
+          week_start: string
+        }
+        Update: {
+          approved_amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          eligible?: boolean
+          employee_id?: string
+          id?: string
+          remaining_balance?: number
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_allocations_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_allocations_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_coupon_token: {
+        Args: { _amount: number }
+        Returns: {
+          expires_at: string
+          token: string
+        }[]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      redeem_coupon: {
+        Args: { _token: string }
+        Returns: {
+          amount: number
+          employee_name: string
+          redeemed_at: string
+          remaining_balance: number
+        }[]
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "super_admin" | "employee" | "cashier" | "auditor"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +440,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["super_admin", "employee", "cashier", "auditor"],
+    },
   },
 } as const
