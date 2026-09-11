@@ -45,9 +45,75 @@ function Dashboard() {
 
 function PasswordReset({profile,onDone}:{profile:Profile;onDone:()=>void}){const [current,setCurrent]=useState("");const [password,setPassword]=useState("");const [error,setError]=useState("");async function submit(e:React.FormEvent){e.preventDefault();setError("");const {error}=await supabase.auth.updateUser({password,current_password:current} as any);if(error){setError(error.message);return}await supabase.from("profiles").update({must_change_password:false}).eq("id",profile.id);onDone()};return <main className="grid min-h-screen place-items-center px-4"><form onSubmit={submit} className="w-full max-w-md border bg-card p-7 shadow-sm"><ShieldCheck className="mb-5 size-10 text-primary"/><h1 className="text-2xl font-extrabold">Secure your account</h1><p className="mt-2 text-sm text-muted-foreground">Change the temporary password before continuing.</p><label className="mt-6 block text-sm font-semibold">Temporary password<Input className="mt-2 h-11" type="password" value={current} onChange={e=>setCurrent(e.target.value)} required/></label><label className="mt-4 block text-sm font-semibold">New password<Input className="mt-2 h-11" type="password" minLength={8} value={password} onChange={e=>setPassword(e.target.value)} required/></label>{error&&<p className="mt-4 text-sm text-destructive">{error}</p>}<Button className="mt-6 h-11 w-full">Set new password</Button></form></main>}
 
-function EmployeeView({allocation,onRefresh}:{allocation:Allocation|null;onRefresh:()=>void}){const [amount,setAmount]=useState(40);const [qr,setQr]=useState<{token:string;expires_at:string}|null>(null);const [error,setError]=useState("");async function generate(){setError("");const {data,error}=await supabase.rpc("create_coupon_token",{_amount:amount});if(error){setError(error.message);return}setQr(data?.[0]??null);onRefresh()}const balance=allocation?.remaining_balance??0;return <div className="grid gap-6 lg:grid-cols-[.8fr_1.2fr]"><section className="border bg-card p-6 shadow-sm"><p className="text-sm font-semibold text-muted-foreground">Available this week</p><div className="mt-3 flex items-end gap-2"><span className="text-5xl font-extrabold">{balance}</span><span className="pb-1 text-lg font-semibold text-muted-foreground">Birr</span></div><div className="mt-6 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{width:`${Math.min(100,balance/2)}%`}}/></div><div className="mt-4 flex justify-between text-xs text-muted-foreground"><span>Monday–Friday</span><span>{allocation?.eligible?"Approved":"Not approved"}</span></div></section><section className="border bg-card p-6 shadow-sm"><div className="flex items-center gap-3"><QrCode className="text-primary"/><div><h2 className="font-bold">Generate payment QR</h2><p className="text-sm text-muted-foreground">Valid for five minutes.</p></div></div><div className="mt-6 grid grid-cols-5 gap-2">{amounts.map(v=><Button key={v} variant={amount===v?"default":"outline"} className="h-12 px-1" disabled={v>balance} onClick={()=>setAmount(v)}>{v}</Button>)}</div><Button className="mt-5 h-12 w-full" disabled={!allocation||amount>balance} onClick={generate}><QrCode/>Generate {amount} Birr QR</Button>{error&&<p className="mt-4 text-sm text-destructive">{error}</p>}{qr&&<div className="mt-6 flex flex-col items-center border-t pt-6"><div className="bg-card p-4"><QRCodeSVG value={qr.token} size={220}/></div><p className="mt-3 font-bold">{amount} Birr</p><p className="text-xs text-muted-foreground">Expires {new Date(qr.expires_at).toLocaleTimeString()}</p></div>}</section></div>}
+function EmployeeView({allocation,onRefresh}:{allocation:Allocation|null;onRefresh:()=>void}){
+  const [amount,setAmount]=useState(40);
+  const [qr,setQr]=useState<{token:string;expires_at:string}|null>(null);
+  const [error,setError]=useState("");
+  const [secondsLeft,setSecondsLeft]=useState(0);
+  useEffect(()=>{
+    if(!qr)return;
+    const tick=()=>{
+      const left=Math.max(0,Math.ceil((new Date(qr.expires_at).getTime()-Date.now())/1000));
+      setSecondsLeft(left);
+      if(left===0)setQr(null);
+    };
+    tick();
+    const id=setInterval(tick,250);
+    return ()=>clearInterval(id);
+  },[qr]);
+  async function generate(){
+    setError("");
+    const {data,error}=await supabase.rpc("create_coupon_token",{_amount:amount});
+    if(error){setError(error.message);return}
+    setQr(data?.[0]??null);
+    onRefresh();
+  }
+  const balance=allocation?.remaining_balance??0;
+  return <div className="grid gap-6 lg:grid-cols-[.8fr_1.2fr]"><section className="border bg-card p-6 shadow-sm"><p className="text-sm font-semibold text-muted-foreground">Available this week</p><div className="mt-3 flex items-end gap-2"><span className="text-5xl font-extrabold">{balance}</span><span className="pb-1 text-lg font-semibold text-muted-foreground">Birr</span></div><div className="mt-6 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{width:`${Math.min(100,balance/2)}%`}}/></div><div className="mt-4 flex justify-between text-xs text-muted-foreground"><span>Monday–Friday</span><span>{allocation?.eligible?"Approved":"Not approved"}</span></div></section><section className="border bg-card p-6 shadow-sm"><div className="flex items-center gap-3"><QrCode className="text-primary"/><div><h2 className="font-bold">Generate payment QR</h2><p className="text-sm text-muted-foreground">Valid for 30 seconds.</p></div></div><div className="mt-6 grid grid-cols-5 gap-2">{amounts.map(v=><Button key={v} variant={amount===v?"default":"outline"} className="h-12 px-1" disabled={v>balance} onClick={()=>setAmount(v)}>{v}</Button>)}</div><Button className="mt-5 h-12 w-full" disabled={!allocation||amount>balance} onClick={generate}><QrCode/>Generate {amount} Birr QR</Button>{error&&<p className="mt-4 text-sm text-destructive">{error}</p>}{qr&&<div className="mt-6 flex flex-col items-center border-t pt-6"><div className="bg-card p-4"><QRCodeSVG value={qr.token} size={220}/></div><p className="mt-3 font-bold">{amount} Birr</p><p className="text-xs font-semibold text-primary">Expires in {secondsLeft}s</p></div>}</section></div>;
+}
 
-function CashierView(){const scannerRef=useRef<any>(null);const [state,setState]=useState<"idle"|"scanning"|"success"|"error">("idle");const [message,setMessage]=useState("");async function redeem(token:string){if(scannerRef.current){await scannerRef.current.stop().catch(()=>{});scannerRef.current=null}const {data,error}=await supabase.rpc("redeem_coupon",{_token:token});if(error){setState("error");setMessage(error.message);return}const row=data?.[0];if(!row){setState("error");setMessage("The coupon could not be verified.");return}setState("success");setMessage(`${row.employee_name} • ${row.amount} Birr • ${row.remaining_balance} Birr remaining`)}async function start(){setMessage("");try{await navigator.mediaDevices.getUserMedia({video:true}).then(s=>s.getTracks().forEach(t=>t.stop()));const {Html5Qrcode}=await import("html5-qrcode");const scanner=new Html5Qrcode("coupon-reader");scannerRef.current=scanner;setState("scanning");await scanner.start({facingMode:"environment"},{fps:15,qrbox:{width:260,height:260}},redeem,()=>{});}catch(e){setState("error");setMessage(e instanceof DOMException&&e.name==="NotAllowedError"?"Camera access was blocked. Open your browser site settings, allow Camera, then try again.":"Camera could not start. Check camera access and try again.")}}useEffect(()=>()=>{scannerRef.current?.stop().catch(()=>{})},[]);return <section className="mx-auto max-w-xl"><div className="overflow-hidden border bg-card shadow-sm"><div id="coupon-reader" className="aspect-square w-full bg-foreground/5"/><div className="p-6 text-center">{state==="success"?<CheckCircle2 className="mx-auto size-12 text-primary"/>:state==="error"?<XCircle className="mx-auto size-12 text-destructive"/>:<Camera className="mx-auto size-12 text-primary"/>}<h2 className="mt-3 text-xl font-bold">{state==="scanning"?"Point at the employee QR":state==="success"?"Coupon accepted":state==="error"?"Could not scan":"Ready to scan"}</h2>{message&&<p className="mt-2 text-sm text-muted-foreground">{message}</p>}<Button className="mt-5 h-12 w-full" onClick={start}><Camera/>{state==="scanning"?"Restart camera":"Enable camera & scan"}</Button></div></div></section>}
+function CashierView(){
+  const scannerRef=useRef<any>(null);
+  const busyRef=useRef(false);
+  const [state,setState]=useState<"idle"|"scanning"|"success"|"error">("idle");
+  const [message,setMessage]=useState("");
+  async function stopScanner(){
+    const scanner=scannerRef.current;
+    scannerRef.current=null;
+    if(scanner){try{await scanner.stop()}catch{}try{scanner.clear()}catch{}}
+  }
+  async function redeem(token:string){
+    if(busyRef.current)return;
+    busyRef.current=true;
+    await stopScanner();
+    const {data,error}=await supabase.rpc("redeem_coupon",{_token:token.trim()});
+    busyRef.current=false;
+    if(error){setState("error");setMessage(error.message);return}
+    const row=data?.[0];
+    if(!row){setState("error");setMessage("The coupon could not be verified.");return}
+    setState("success");
+    setMessage(`${row.employee_name} • ${row.amount} Birr deducted • ${row.remaining_balance} Birr remaining`);
+  }
+  async function start(){
+    setMessage("");
+    busyRef.current=false;
+    await stopScanner();
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+      stream.getTracks().forEach(t=>t.stop());
+      const {Html5Qrcode}=await import("html5-qrcode");
+      const scanner=new Html5Qrcode("coupon-reader");
+      scannerRef.current=scanner;
+      setState("scanning");
+      await scanner.start({facingMode:"environment"},{fps:15,qrbox:{width:260,height:260}},redeem,()=>{});
+    }catch(e){
+      setState("error");
+      setMessage(e instanceof DOMException&&e.name==="NotAllowedError"?"Camera access was blocked. Open your browser site settings, allow Camera, then try again.":"Camera could not start. Check camera access and try again.");
+    }
+  }
+  useEffect(()=>()=>{scannerRef.current?.stop().catch(()=>{})},[]);
+  return <section className="mx-auto max-w-xl"><div className="overflow-hidden border bg-card shadow-sm"><div id="coupon-reader" className="aspect-square w-full bg-foreground/5"/><div className="p-6 text-center">{state==="success"?<CheckCircle2 className="mx-auto size-12 text-primary"/>:state==="error"?<XCircle className="mx-auto size-12 text-destructive"/>:<Camera className="mx-auto size-12 text-primary"/>}<h2 className="mt-3 text-xl font-bold">{state==="scanning"?"Point at the employee QR":state==="success"?"Coupon accepted":state==="error"?"Could not scan":"Ready to scan"}</h2>{message&&<p className="mt-2 text-sm text-muted-foreground">{message}</p>}<Button className="mt-5 h-12 w-full" onClick={start}><Camera/>{state==="scanning"?"Restart camera":state==="success"?"Scan next coupon":"Enable camera & scan"}</Button></div></div></section>;
+}
 
 function AuditView({allocations,redemptions,logs}:{allocations:any[];redemptions:any[];logs:any[]}){const issued=allocations.reduce((s,a)=>s+a.approved_amount,0),spent=redemptions.reduce((s,r)=>s+r.amount,0);return <><div className="grid gap-4 sm:grid-cols-3"><Stat icon={<WalletCards/>} label="Approved" value={`${issued.toLocaleString()} Birr`}/><Stat icon={<BarChart3/>} label="Redeemed" value={`${spent.toLocaleString()} Birr`}/><Stat icon={<Users/>} label="Active allocations" value={String(allocations.filter(a=>a.eligible).length)}/></div><section className="mt-6 border bg-card p-6"><h2 className="font-bold">Recent redemptions</h2><div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-muted-foreground"><tr><th className="py-3">Employee</th><th>Amount</th><th>Time</th></tr></thead><tbody>{redemptions.map(r=><tr className="border-t" key={r.id}><td className="py-3 font-medium">{r.profiles?.display_name??r.employee_id}</td><td>{r.amount} Birr</td><td>{new Date(r.redeemed_at).toLocaleString()}</td></tr>)}</tbody></table></div></section><section className="mt-6 border bg-card p-6"><h2 className="font-bold">Audit trail</h2><div className="mt-4 space-y-3">{logs.map(l=><div key={l.id} className="flex justify-between border-t pt-3 text-sm"><span>{l.action.replaceAll("_"," ")}</span><span className="text-muted-foreground">{new Date(l.created_at).toLocaleString()}</span></div>)}</div></section></>}
 function Stat({icon,label,value}:{icon:React.ReactNode;label:string;value:string}){return <div className="border bg-card p-5 shadow-sm"><div className="text-primary">{icon}</div><p className="mt-5 text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-extrabold">{value}</p></div>}
