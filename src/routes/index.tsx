@@ -4,7 +4,6 @@ import { LogIn, ShieldCheck, Utensils } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { bootstrapAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -29,7 +28,6 @@ function Index() {
   async function signIn(e: React.FormEvent) {
     e.preventDefault(); setLoading(true); setError("");
     try {
-      if (username.trim().toLowerCase() === "admin") await bootstrapAdmin();
       const { error: authError } = await supabase.auth.signInWithPassword({ email: `${username.trim().toLowerCase()}@bole.local`, password });
       if (authError) throw authError;
       await navigate({ to: "/dashboard" });
