@@ -23,8 +23,8 @@ export const createAccounts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { accounts: AccountInput[] }) => input)
   .handler(async ({ data, context }) => {
-    const { data: allowed } = await context.supabase.rpc("has_role" as never, { _user_id: context.userId, _role: "super_admin" } as never);
-    if (!allowed) throw new Error("Super Admin access required");
+    const { data: role } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId).eq("role", "super_admin").maybeSingle();
+    if (!role) throw new Error("Super Admin access required");
     if (data.accounts.length > 2000) throw new Error("Maximum 2,000 accounts per upload");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const results = [];
