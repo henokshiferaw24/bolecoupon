@@ -62,12 +62,15 @@ function EmployeeView({allocation,onRefresh}:{allocation:Allocation|null;onRefre
     return ()=>clearInterval(id);
   },[qr]);
   async function generate(){
-    setError("");
+    setError("");setQr(null);
     const {data,error}=await supabase.rpc("create_coupon_token",{_amount:amount});
-    if(error){setError(error.message);return}
-    setQr(data?.[0]??null);
+    if(error){setError(friendly(error.message));return}
+    const row=data?.[0];
+    if(!row){setError("The code could not be created. Please try again.");return}
+    setQr(row);
     onRefresh();
   }
+
   const balance=allocation?.remaining_balance??0;
   return <div className="grid gap-6 lg:grid-cols-[.8fr_1.2fr]"><section className="border bg-card p-6 shadow-sm"><p className="text-sm font-semibold text-muted-foreground">Available this week</p><div className="mt-3 flex items-end gap-2"><span className="text-5xl font-extrabold">{balance}</span><span className="pb-1 text-lg font-semibold text-muted-foreground">Birr</span></div><div className="mt-6 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{width:`${Math.min(100,balance/2)}%`}}/></div><div className="mt-4 flex justify-between text-xs text-muted-foreground"><span>Monday–Friday</span><span>{allocation?.eligible?"Approved":"Not approved"}</span></div></section><section className="border bg-card p-6 shadow-sm"><div className="flex items-center gap-3"><QrCode className="text-primary"/><div><h2 className="font-bold">Generate payment QR</h2><p className="text-sm text-muted-foreground">Valid for 30 seconds.</p></div></div><div className="mt-6 grid grid-cols-5 gap-2">{amounts.map(v=><Button key={v} variant={amount===v?"default":"outline"} className="h-12 px-1" disabled={v>balance} onClick={()=>setAmount(v)}>{v}</Button>)}</div><Button className="mt-5 h-12 w-full" disabled={!allocation||amount>balance} onClick={generate}><QrCode/>Generate {amount} Birr QR</Button>{error&&<p className="mt-4 text-sm text-destructive">{error}</p>}{qr&&<div className="mt-6 flex flex-col items-center border-t pt-6"><div className="bg-card p-4"><QRCodeSVG value={qr.token} size={220}/></div><p className="mt-3 font-bold">{amount} Birr</p><p className="text-xs font-semibold text-primary">Expires in {secondsLeft}s</p></div>}</section></div>;
 }
