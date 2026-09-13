@@ -92,6 +92,8 @@ function CashierView(){
   const busyRef=useRef(false);
   const [state,setState]=useState<"idle"|"scanning"|"success"|"error">("idle");
   const [message,setMessage]=useState("");
+  const [manual,setManual]=useState("");
+  const weekend=isWeekend();
   async function stopScanner(){
     const scanner=scannerRef.current;
     scannerRef.current=null;
@@ -103,10 +105,11 @@ function CashierView(){
     await stopScanner();
     const {data,error}=await supabase.rpc("redeem_coupon",{_token:token.trim()});
     busyRef.current=false;
-    if(error){setState("error");setMessage(error.message);return}
+    if(error){setState("error");setMessage(friendly(error.message));return}
     const row=data?.[0];
     if(!row){setState("error");setMessage("The coupon could not be verified.");return}
     setState("success");
+    setManual("");
     setMessage(`${row.employee_name} • ${row.amount} Birr deducted • ${row.remaining_balance} Birr remaining`);
   }
   async function start(){
@@ -114,21 +117,33 @@ function CashierView(){
     busyRef.current=false;
     await stopScanner();
     try{
-      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+      if(!navigator.mediaDevices?.getUserMedia)throw new Error("no-camera-api");
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}});
       stream.getTracks().forEach(t=>t.stop());
       const {Html5Qrcode}=await import("html5-qrcode");
       const scanner=new Html5Qrcode("coupon-reader");
       scannerRef.current=scanner;
       setState("scanning");
-      await scanner.start({facingMode:"environment"},{fps:15,qrbox:{width:260,height:260}},redeem,()=>{});
+      const config={fps:15,qrbox:{width:260,height:260}};
+      try{
+        await scanner.start({facingMode:"environment"},config,redeem,()=>{});
+      }catch{
+        const cameras=await Html5Qrcode.getCameras();
+        if(!cameras.length)throw new Error("no-camera");
+        await scanner.start(cameras[cameras.length-1].id,config,redeem,()=>{});
+      }
     }catch(e){
+      await stopScanner();
       setState("error");
-      setMessage(e instanceof DOMException&&e.name==="NotAllowedError"?"Camera access was blocked. Open your browser site settings, allow Camera, then try again.":"Camera could not start. Check camera access and try again.");
+      setMessage(e instanceof DOMException&&e.name==="NotAllowedError"
+        ?"Camera access was blocked. Allow camera for this site in your browser settings, then tap the camera button again."
+        :"The camera could not start on this device. You can type the coupon code below instead.");
     }
   }
   useEffect(()=>()=>{scannerRef.current?.stop().catch(()=>{})},[]);
-  return <section className="mx-auto max-w-xl"><div className="overflow-hidden border bg-card shadow-sm"><div id="coupon-reader" className="aspect-square w-full bg-foreground/5"/><div className="p-6 text-center">{state==="success"?<CheckCircle2 className="mx-auto size-12 text-primary"/>:state==="error"?<XCircle className="mx-auto size-12 text-destructive"/>:<Camera className="mx-auto size-12 text-primary"/>}<h2 className="mt-3 text-xl font-bold">{state==="scanning"?"Point at the employee QR":state==="success"?"Coupon accepted":state==="error"?"Could not scan":"Ready to scan"}</h2>{message&&<p className="mt-2 text-sm text-muted-foreground">{message}</p>}<Button className="mt-5 h-12 w-full" onClick={start}><Camera/>{state==="scanning"?"Restart camera":state==="success"?"Scan next coupon":"Enable camera & scan"}</Button></div></div></section>;
+  return <section className="mx-auto max-w-xl"><div className="overflow-hidden border bg-card shadow-sm"><div id="coupon-reader" className="aspect-square w-full bg-foreground/5"/><div className="p-6 text-center">{state==="success"?<CheckCircle2 className="mx-auto size-12 text-primary"/>:state==="error"?<XCircle className="mx-auto size-12 text-destructive"/>:<Camera className="mx-auto size-12 text-primary"/>}<h2 className="mt-3 text-xl font-bold">{state==="scanning"?"Point at the employee QR":state==="success"?"Coupon accepted":state==="error"?"Could not accept":"Ready to scan"}</h2>{message&&<p className={`mt-2 text-sm ${state==="error"?"text-destructive":"text-muted-foreground"}`}>{message}</p>}{weekend&&<p className="mt-3 border bg-muted/50 p-3 text-sm text-muted-foreground">Coupons can only be accepted Monday to Friday.</p>}<Button className="mt-5 h-12 w-full" disabled={weekend} onClick={start}><Camera/>{state==="scanning"?"Restart camera":state==="success"?"Scan next coupon":"Enable camera & scan"}</Button><div className="mt-6 border-t pt-5 text-left"><p className="text-sm font-semibold">Or type the code</p><div className="mt-2 flex gap-2"><Input className="h-11 font-mono" placeholder="Coupon code" value={manual} onChange={e=>setManual(e.target.value)}/><Button className="h-11" disabled={weekend||manual.trim().length<8} onClick={()=>{busyRef.current=false;redeem(manual)}}>Accept</Button></div></div></div></div></section>;
 }
+
 
 function AuditView({allocations,redemptions,logs}:{allocations:any[];redemptions:any[];logs:any[]}){const issued=allocations.reduce((s,a)=>s+a.approved_amount,0),spent=redemptions.reduce((s,r)=>s+r.amount,0);return <><div className="grid gap-4 sm:grid-cols-3"><Stat icon={<WalletCards/>} label="Approved" value={`${issued.toLocaleString()} Birr`}/><Stat icon={<BarChart3/>} label="Redeemed" value={`${spent.toLocaleString()} Birr`}/><Stat icon={<Users/>} label="Active allocations" value={String(allocations.filter(a=>a.eligible).length)}/></div><section className="mt-6 border bg-card p-6"><h2 className="font-bold">Recent redemptions</h2><div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-muted-foreground"><tr><th className="py-3">Employee</th><th>Amount</th><th>Time</th></tr></thead><tbody>{redemptions.map(r=><tr className="border-t" key={r.id}><td className="py-3 font-medium">{r.profiles?.display_name??r.employee_id}</td><td>{r.amount} Birr</td><td>{new Date(r.redeemed_at).toLocaleString()}</td></tr>)}</tbody></table></div></section><section className="mt-6 border bg-card p-6"><h2 className="font-bold">Audit trail</h2><div className="mt-4 space-y-3">{logs.map(l=><div key={l.id} className="flex justify-between border-t pt-3 text-sm"><span>{l.action.replaceAll("_"," ")}</span><span className="text-muted-foreground">{new Date(l.created_at).toLocaleString()}</span></div>)}</div></section></>}
 function Stat({icon,label,value}:{icon:React.ReactNode;label:string;value:string}){return <div className="border bg-card p-5 shadow-sm"><div className="text-primary">{icon}</div><p className="mt-5 text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-extrabold">{value}</p></div>}
