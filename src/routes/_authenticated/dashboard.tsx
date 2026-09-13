@@ -129,8 +129,9 @@ function CashierView(){
         await scanner.start({facingMode:"environment"},config,redeem,()=>{});
       }catch{
         const cameras=await Html5Qrcode.getCameras();
-        if(!cameras.length)throw new Error("no-camera");
-        await scanner.start(cameras[cameras.length-1].id,config,redeem,()=>{});
+        const cam=cameras[cameras.length-1];
+        if(!cam)throw new Error("no-camera");
+        await scanner.start(cam.id,config,redeem,()=>{});
       }
     }catch(e){
       await stopScanner();
