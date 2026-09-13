@@ -45,6 +45,17 @@ function Dashboard() {
 
 function PasswordReset({profile,onDone}:{profile:Profile;onDone:()=>void}){const [current,setCurrent]=useState("");const [password,setPassword]=useState("");const [error,setError]=useState("");async function submit(e:React.FormEvent){e.preventDefault();setError("");const {error}=await supabase.auth.updateUser({password,current_password:current} as any);if(error){setError(error.message);return}await supabase.from("profiles").update({must_change_password:false}).eq("id",profile.id);onDone()};return <main className="grid min-h-screen place-items-center px-4"><form onSubmit={submit} className="w-full max-w-md border bg-card p-7 shadow-sm"><ShieldCheck className="mb-5 size-10 text-primary"/><h1 className="text-2xl font-extrabold">Secure your account</h1><p className="mt-2 text-sm text-muted-foreground">Change the temporary password before continuing.</p><label className="mt-6 block text-sm font-semibold">Temporary password<Input className="mt-2 h-11" type="password" value={current} onChange={e=>setCurrent(e.target.value)} required/></label><label className="mt-4 block text-sm font-semibold">New password<Input className="mt-2 h-11" type="password" minLength={8} value={password} onChange={e=>setPassword(e.target.value)} required/></label>{error&&<p className="mt-4 text-sm text-destructive">{error}</p>}<Button className="mt-6 h-11 w-full">Set new password</Button></form></main>}
 
+const isWeekend=()=>{const d=new Date().toLocaleDateString("en-US",{weekday:"short",timeZone:"Africa/Addis_Ababa"});return d==="Sat"||d==="Sun"};
+function friendly(msg:string){
+  if(/Monday through Friday|weekends/i.test(msg))return "Coupons work Monday to Friday only. Please try again on a working day.";
+  if(/Insufficient weekly balance/i.test(msg))return "There isn't enough balance left this week for that amount.";
+  if(/expired/i.test(msg))return "This code has expired. Ask the employee to create a new one.";
+  if(/already redeemed/i.test(msg))return "This code was already used.";
+  if(/not found/i.test(msg))return "This code is not valid.";
+  if(/Cashier access required/i.test(msg))return "This account is not allowed to accept coupons.";
+  return msg;
+}
+
 function EmployeeView({allocation,onRefresh}:{allocation:Allocation|null;onRefresh:()=>void}){
   const [amount,setAmount]=useState(40);
   const [qr,setQr]=useState<{token:string;expires_at:string}|null>(null);
