@@ -28,7 +28,7 @@ function Dashboard() {
   const navigate = useNavigate();
   const [profile,setProfile]=useState<Profile|null>(null); const [role,setRole]=useState<Role|null>(null); const [allocation,setAllocation]=useState<Allocation|null>(null);
   const [redemptions,setRedemptions]=useState<any[]>([]); const [allocations,setAllocations]=useState<any[]>([]); const [logs,setLogs]=useState<any[]>([]); const [loading,setLoading]=useState(true);
-  async function load(){ setLoading(true); const {data:{user}}=await supabase.auth.getUser(); if(!user)return; const [{data:p},{data:r}]=await Promise.all([supabase.from("profiles").select("*").eq("id",user.id).single(),supabase.from("user_roles").select("role").eq("user_id",user.id).single()]); setProfile(p); const nextRole=r?.role as Role; setRole(nextRole);
+  async function load(silent?:boolean){ if(!silent)setLoading(true); const {data:{user}}=await supabase.auth.getUser(); if(!user)return; const [{data:p},{data:r}]=await Promise.all([supabase.from("profiles").select("*").eq("id",user.id).single(),supabase.from("user_roles").select("role").eq("user_id",user.id).single()]); setProfile(p); const nextRole=r?.role as Role; setRole(nextRole);
     if(nextRole==="employee"){const {data}=await supabase.from("weekly_allocations").select("*").eq("employee_id",user.id).order("week_start",{ascending:false}).limit(1).maybeSingle();setAllocation(data)}
     if(nextRole==="auditor"||nextRole==="super_admin"){const [{data:a},{data:rd},{data:l}]=await Promise.all([supabase.from("weekly_allocations").select("*, profiles!weekly_allocations_employee_id_fkey(display_name, employee_number)").order("week_start",{ascending:false}).limit(100),supabase.from("redemptions").select("*, profiles!redemptions_employee_id_fkey(display_name)").order("redeemed_at",{ascending:false}).limit(50),supabase.from("audit_logs").select("*").order("created_at",{ascending:false}).limit(50)]);setAllocations(a??[]);setRedemptions(rd??[]);setLogs(l??[])}
     setLoading(false);
@@ -40,7 +40,7 @@ function Dashboard() {
   if(profile.must_change_password)return <PasswordReset profile={profile} onDone={()=>setProfile({...profile,must_change_password:false})}/>;
   return <div className="min-h-screen bg-background"><header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6"><div className="flex items-center gap-3 font-extrabold"><span className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground"><Ticket className="size-5"/></span>Bole Coupons</div><div className="flex items-center gap-3"><div className="hidden text-right sm:block"><p className="text-sm font-semibold">{profile.display_name}</p><p className="text-xs capitalize text-muted-foreground">{role.replace("_"," ")}</p></div><Button variant="outline" size="icon" onClick={signOut} title="Sign out"><LogOut/></Button></div></div></header>
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6"><div className="mb-8"><p className="text-sm font-semibold text-primary">{new Date().toLocaleDateString("en-ET",{weekday:"long",month:"long",day:"numeric"})}</p><h1 className="mt-1 text-3xl font-extrabold">{role==="employee"?"Your meal allowance":role==="cashier"?"Scan a meal coupon":role==="auditor"?"Financial oversight":"System administration"}</h1></div>
-    {role==="employee"&&<EmployeeView allocation={allocation} onRefresh={load}/>} {role==="cashier"&&<CashierView/>} {role==="auditor"&&<AuditView allocations={allocations} redemptions={redemptions} logs={logs}/>} {role==="super_admin"&&<AdminView allocations={allocations} redemptions={redemptions} onRefresh={load}/>}</main></div>;
+    {role==="employee"&&<EmployeeView allocation={allocation} onRefresh={()=>load(true)}/>} {role==="cashier"&&<CashierView/>} {role==="auditor"&&<AuditView allocations={allocations} redemptions={redemptions} logs={logs}/>} {role==="super_admin"&&<AdminView allocations={allocations} redemptions={redemptions} onRefresh={load}/>}</main></div>;
 }
 
 function PasswordReset({profile,onDone}:{profile:Profile;onDone:()=>void}){const [current,setCurrent]=useState("");const [password,setPassword]=useState("");const [error,setError]=useState("");async function submit(e:React.FormEvent){e.preventDefault();setError("");const {error}=await supabase.auth.updateUser({password,current_password:current} as any);if(error){setError(error.message);return}await supabase.from("profiles").update({must_change_password:false}).eq("id",profile.id);onDone()};return <main className="grid min-h-screen place-items-center px-4"><form onSubmit={submit} className="w-full max-w-md border bg-card p-7 shadow-sm"><ShieldCheck className="mb-5 size-10 text-primary"/><h1 className="text-2xl font-extrabold">Secure your account</h1><p className="mt-2 text-sm text-muted-foreground">Change the temporary password before continuing.</p><label className="mt-6 block text-sm font-semibold">Temporary password<Input className="mt-2 h-11" type="password" value={current} onChange={e=>setCurrent(e.target.value)} required/></label><label className="mt-4 block text-sm font-semibold">New password<Input className="mt-2 h-11" type="password" minLength={8} value={password} onChange={e=>setPassword(e.target.value)} required/></label>{error&&<p className="mt-4 text-sm text-destructive">{error}</p>}<Button className="mt-6 h-11 w-full">Set new password</Button></form></main>}
@@ -58,13 +58,13 @@ function friendly(msg:string){
 
 function EmployeeView({allocation,onRefresh}:{allocation:Allocation|null;onRefresh:()=>void}){
   const [amount,setAmount]=useState(40);
-  const [qr,setQr]=useState<{token:string;expires_at:string}|null>(null);
+  const [qr,setQr]=useState<{token:string;expires_at:string;deadline:number}|null>(null);
   const [error,setError]=useState("");
   const [secondsLeft,setSecondsLeft]=useState(0);
   useEffect(()=>{
     if(!qr)return;
     const tick=()=>{
-      const left=Math.max(0,Math.ceil((new Date(qr.expires_at).getTime()-Date.now())/1000));
+      const left=Math.max(0,Math.ceil((qr.deadline-Date.now())/1000));
       setSecondsLeft(left);
       if(left===0)setQr(null);
     };
@@ -78,7 +78,9 @@ function EmployeeView({allocation,onRefresh}:{allocation:Allocation|null;onRefre
     if(error){setError(friendly(error.message));return}
     const row=data?.[0];
     if(!row){setError("The code could not be created. Please try again.");return}
-    setQr(row);
+    const serverWindow=new Date(row.expires_at).getTime()-new Date().getTime();
+    const seconds=serverWindow>0&&serverWindow<60000?serverWindow:30000;
+    setQr({...row,deadline:Date.now()+seconds});
     onRefresh();
   }
 
