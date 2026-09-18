@@ -51,7 +51,7 @@ export const resetAccountPassword = createServerFn({ method: "POST" })
     if (data.temporaryPassword.trim().length < 8) throw new Error("The temporary password must be at least 8 characters");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { password: data.temporaryPassword, email_confirm: true });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(/not found/i.test(error.message) ? "This person no longer has a sign-in account. Delete the record and create the account again." : error.message);
     await supabaseAdmin.from("profiles").update({ must_change_password: data.userId !== context.userId }).eq("id", data.userId);
     return { ok: true };
   });
@@ -67,7 +67,9 @@ export const deleteAccount = createServerFn({ method: "POST" })
     if (count && count > 0) throw new Error("This account has redemption history and cannot be deleted. Deactivate it instead.");
     await supabaseAdmin.from("coupon_tokens").update({ expires_at: new Date().toISOString() }).eq("employee_id", data.userId).is("redeemed_at", null);
     const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
-    if (error) throw new Error(error.message);
+    if (error && !/not found/i.test(error.message)) throw new Error(error.message);
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
+    await supabaseAdmin.from("profiles").delete().eq("id", data.userId);
     return { ok: true };
   });
 
